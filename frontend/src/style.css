@@ -1,7 +1,5 @@
 html {
-    background-color: rgba(27, 38, 54, 1);
-    text-align: center;
-    color: white;
+    background-color: #13151a; /* matches --jet-black-200 in App.css */
 }
 
 body {
@@ -21,6 +19,5 @@ body {
 }
 
 #app {
-    height: 100vh;
-    text-align: center;
+    min-height: 100vh;
 }

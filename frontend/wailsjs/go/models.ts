@@ -24,6 +24,8 @@ export namespace structs {
 	    Meets: boolean;
 	    MeetsRecommended: boolean;
 	    Found: boolean;
+	    IsIntegrated: boolean;
+	    VRAMFail: boolean;
 	    UserGPU: string;
 	    RequiredGPU: string;
 	
@@ -36,6 +38,8 @@ export namespace structs {
 	        this.Meets = source["Meets"];
 	        this.MeetsRecommended = source["MeetsRecommended"];
 	        this.Found = source["Found"];
+	        this.IsIntegrated = source["IsIntegrated"];
+	        this.VRAMFail = source["VRAMFail"];
 	        this.UserGPU = source["UserGPU"];
 	        this.RequiredGPU = source["RequiredGPU"];
 	    }

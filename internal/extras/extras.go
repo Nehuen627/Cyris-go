@@ -14,7 +14,6 @@ var gpuDatabase []structs.GPUEntry
 var integratedDatabase []structs.GPUEntry
 var cpuDatabase []structs.CPUEntry
 
-// loadJSON fetches a URL and unmarshals the JSON body into dst.
 func loadJSON(url string, dst interface{}) error {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -31,9 +30,6 @@ func loadJSON(url string, dst interface{}) error {
 	return nil
 }
 
-// LoadGPUDatabase loads discrete GPU data from the RightNow-AI GPU database.
-// The RightNow JSON entries have no "fp32" field; we use "pixelRate" (Gpixels/s)
-// as a proportional performance proxy and store it in FP32 so the comparisons work.
 func LoadGPUDatabase() error {
 	urls := []string{
 		"https://raw.githubusercontent.com/RightNow-AI/RightNow-GPU-Database/main/data/nvidia/all.json",
@@ -46,7 +42,6 @@ func LoadGPUDatabase() error {
 			return err
 		}
 		for i := range entries {
-			// If fp32 is not set (RightNow DB doesn't have it), fall back to pixelRate.
 			if entries[i].FP32 == 0 && entries[i].PixelRate > 0 {
 				entries[i].FP32 = entries[i].PixelRate
 			}
@@ -56,52 +51,54 @@ func LoadGPUDatabase() error {
 	return nil
 }
 
-// LoadIntegratedDatabase loads integrated GPU data from voidful/gpu-info-api.
-// That DB stores performance as "Pixel Shader (MP/s)" — we convert to a rough
-// TFLOPS equivalent by dividing by 1000 (MP/s → GFLOPS ≈ TFLOPS at low scale).
-// Entries with Model == "nan" (Python NaN) are skipped.
 func LoadIntegratedDatabase() error {
-	// The voidful DB is a map of key → entry object.
 	var raw map[string]struct {
 		Model       string  `json:"Model"`
 		PixelShader float64 `json:"Pixel Shader (MP/s)"`
-		// Some modern entries do have this field directly.
-		TFLOPS string `json:"Single-precision TFLOPS"`
+		TFLOPS      string  `json:"Single-precision TFLOPS"`
+		MemSizeMB   string  `json:"Memory Configuration Size (MB)"`
 	}
 	if err := loadJSON("https://raw.githubusercontent.com/voidful/gpu-info-api/gpu-data/gpu.json", &raw); err != nil {
 		return err
 	}
 
 	for _, entry := range raw {
-		// Skip bogus entries where the model was serialized as Python NaN.
 		if entry.Model == "" || strings.ToLower(entry.Model) == "nan" {
 			continue
 		}
 
 		var fp32 float64
 
-		// Prefer explicit TFLOPS field if present and parseable.
 		if entry.TFLOPS != "" && entry.TFLOPS != "?" {
 			if v, err := strconv.ParseFloat(strings.TrimSpace(entry.TFLOPS), 64); err == nil && v > 0 {
 				fp32 = v
 			}
 		}
 
-		// Fall back to Pixel Shader rate converted to approximate TFLOPS.
-		// 1 MP/s pixel shading ≈ several GFLOPS; dividing by 1000 gives a rough TFLOPS proxy.
 		if fp32 == 0 && entry.PixelShader > 0 {
 			fp32 = entry.PixelShader / 1000.0
 		}
 
+		var memGB float64
+		if entry.MemSizeMB != "" {
+			for _, tok := range strings.Fields(entry.MemSizeMB) {
+				if v, err := strconv.ParseFloat(tok, 64); err == nil && v > 0 {
+					memGB = v / 1024.0
+					break
+				}
+			}
+		}
+
 		integratedDatabase = append(integratedDatabase, structs.GPUEntry{
-			Name: entry.Model,
-			FP32: fp32,
+			Name:       entry.Model,
+			FP32:       fp32,
+			MemoryGB:   memGB,
+			Integrated: true,
 		})
 	}
 	return nil
 }
 
-// LoadCPUDatabase loads CPU benchmark data from spapas/cpu-benchmark.
 func LoadCPUDatabase() error {
 	var raw struct {
 		Data []struct {
@@ -127,7 +124,6 @@ func LoadCPUDatabase() error {
 	return nil
 }
 
-// normalizeQuery cleans up common trademark noise from a GPU/CPU name string.
 func normalizeQuery(name string) string {
 	lower := strings.ToLower(strings.TrimSpace(name))
 	lower = strings.ReplaceAll(lower, "(r)", "")
@@ -136,8 +132,6 @@ func normalizeQuery(name string) string {
 	return strings.TrimSpace(lower)
 }
 
-// LookupCPU finds a CPU entry by name using fuzzy substring matching.
-// Prefers the longest DB name that matches to avoid false positives on short names.
 func LookupCPU(name string) (structs.CPUEntry, bool) {
 	lower := normalizeQuery(name)
 	if lower == "" || lower == "none" {
@@ -162,11 +156,6 @@ func LookupCPU(name string) (structs.CPUEntry, bool) {
 	return best, found
 }
 
-// LookupGPU finds a GPU entry by name. It searches discrete GPUs first, then
-// integrated, then tries to extract a GPU family name from bracket notation
-// (e.g. "Raptor Lake-P [UHD Graphics]" → search for "UHD Graphics"), and only
-// falls back to broad family estimates as a last resort.
-// Matching always prefers the longest (most specific) DB name.
 func LookupGPU(name string) (structs.GPUEntry, bool) {
 	lower := normalizeQuery(name)
 	if lower == "" || lower == "none" {
@@ -177,21 +166,15 @@ func LookupGPU(name string) (structs.GPUEntry, bool) {
 		return entry, true
 	}
 
-	// ghw often returns codename-based names like "Intel Raptor Lake-P [UHD Graphics]"
-	// where the real GPU family is inside the brackets. Extract it and retry.
 	if family := extractBracketName(lower); family != "" && family != lower {
 		if entry, ok := searchAllGPUDbs(family); ok {
 			return entry, true
 		}
 	}
 
-	// Last resort: broad-family estimates. These are intentionally generic —
-	// just enough to avoid treating an unknown integrated GPU as having 0 FP32.
 	return broadFamilyFallback(lower)
 }
 
-// searchAllGPUDbs searches both the discrete and integrated GPU databases for
-// the given (already-normalized) query string. Returns the longest match found.
 func searchAllGPUDbs(query string) (structs.GPUEntry, bool) {
 	var best structs.GPUEntry
 	bestLen := 0
@@ -212,8 +195,6 @@ func searchAllGPUDbs(query string) (structs.GPUEntry, bool) {
 	return best, found
 }
 
-// extractBracketName returns the text inside the first pair of square brackets,
-// e.g. "raptor lake-p [uhd graphics]" → "uhd graphics". Returns "" if none.
 func extractBracketName(s string) string {
 	start := strings.Index(s, "[")
 	end := strings.Index(s, "]")
@@ -223,25 +204,55 @@ func extractBracketName(s string) string {
 	return ""
 }
 
-// broadFamilyFallback is the genuine last resort — only reached when neither the
-// databases nor bracket extraction produced a result. Values are intentionally
-// rough averages per GPU family, not per model.
+func IsIntegratedGPU(name string) bool {
+	lower := normalizeQuery(name)
+	if lower == "" || lower == "none" {
+		return false
+	}
+
+	for _, gpu := range integratedDatabase {
+		dbName := strings.ToLower(gpu.Name)
+		if strings.Contains(lower, dbName) || strings.Contains(dbName, lower) {
+			return true
+		}
+	}
+
+	if family := extractBracketName(lower); family != "" && family != lower {
+		for _, gpu := range integratedDatabase {
+			dbName := strings.ToLower(gpu.Name)
+			if strings.Contains(family, dbName) || strings.Contains(dbName, family) {
+				return true
+			}
+		}
+	}
+
+	integratedPatterns := []string{
+		"iris xe", "uhd graphics", "hd graphics", "radeon graphics",
+		"iris plus", "iris pro", "radeon vega",
+	}
+	for _, pattern := range integratedPatterns {
+		if strings.Contains(lower, pattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func broadFamilyFallback(lower string) (structs.GPUEntry, bool) {
 	switch {
 	case strings.Contains(lower, "iris xe"):
-		return structs.GPUEntry{Name: "Intel Iris Xe Graphics", FP32: 1.6}, true
+		return structs.GPUEntry{Name: "Intel Iris Xe Graphics", FP32: 1.6, Integrated: true}, true
 	case strings.Contains(lower, "uhd graphics"):
-		return structs.GPUEntry{Name: "Intel UHD Graphics", FP32: 0.4}, true
+		return structs.GPUEntry{Name: "Intel UHD Graphics", FP32: 0.4, Integrated: true}, true
 	case strings.Contains(lower, "hd graphics"):
-		return structs.GPUEntry{Name: "Intel HD Graphics", FP32: 0.2}, true
+		return structs.GPUEntry{Name: "Intel HD Graphics", FP32: 0.2, Integrated: true}, true
 	case strings.Contains(lower, "radeon graphics"):
-		return structs.GPUEntry{Name: "AMD Radeon Graphics", FP32: 1.5}, true
+		return structs.GPUEntry{Name: "AMD Radeon Graphics", FP32: 1.5, Integrated: true}, true
 	}
 	return structs.GPUEntry{}, false
 }
 
-// ParseRequirements parses a Steam PC requirements HTML blob and extracts
-// RAM (in GB), Disk (in GB), GPU name, and CPU name.
 func ParseRequirements(requirements string) (uint64, uint64, string, string) {
 	lower := strings.ToLower(requirements)
 
@@ -254,7 +265,6 @@ func ParseRequirements(requirements string) (uint64, uint64, string, string) {
 			num, err := strconv.ParseUint(parts[0], 10, 64)
 			if err == nil {
 				ram = num
-				// Convert MB to GB if the next token says "mb"
 				if len(parts) > 1 && strings.ToLower(parts[1]) == "mb" {
 					ram = ram / 1024
 				}
@@ -271,7 +281,6 @@ func ParseRequirements(requirements string) (uint64, uint64, string, string) {
 			num, err := strconv.ParseUint(parts[0], 10, 64)
 			if err == nil {
 				disk = num
-				// Convert MB to GB if the next token says "mb"
 				if len(parts) > 1 && strings.ToLower(parts[1]) == "mb" {
 					disk = disk / 1024
 				}
@@ -304,8 +313,4 @@ func ParseRequirements(requirements string) (uint64, uint64, string, string) {
 	}
 
 	return ram, disk, gpu, cpu
-}
-
-func Hystory() {
-	// send back the last 3 options searched
 }

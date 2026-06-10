@@ -3,11 +3,24 @@ import { Search, Cpu, HardDrive, Monitor, CheckCircle, XCircle, SearchIcon, Aler
 import './App.css';
 import { GetHardwareInfo, SearchGame, GetGameRequirements, CheckRequirements } from '../wailsjs/go/main/App';
 
+// Strip the leading heading Steam includes in requirement HTML
+// e.g. <strong>Minimum:</strong>, <strong>REQUIRED</strong>, etc.
+function cleanReqHtml(html: string): string {
+    if (!html || html === 'Not specified') return html;
+    return html
+        // Remove first <strong> that is just a header label (Minimum/Recommended/Required etc.)
+        .replace(/^\s*<strong>[^<]*(minimum|recommended|required|requires)[^<]*<\/strong>(\s*<br\s*\/?>\s*)*/gi, '')
+        // Remove any bare label line like "Minimum:<br>" at the start
+        .replace(/^\s*(minimum|recommended|required|requires)[^<]*(<br\s*\/?>\s*)+/gi, '')
+        .trim();
+}
+
 function App() {
     const [specs, setSpecs] = useState<any>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
+    const [selectedGameName, setSelectedGameName] = useState<string | null>(null);
     const [history, setHistory] = useState<any[]>([]);
     const [gameDetails, setGameDetails] = useState<any>(null);
 
@@ -33,6 +46,7 @@ function App() {
 
     const handleSelectGame = async (game: any) => {
         setSelectedGameId(game.appid); // Note: steam API uses 'appid'
+        setSelectedGameName(game.name);
         
         try {
             const reqData = await GetGameRequirements(parseInt(game.appid, 10));
@@ -61,32 +75,44 @@ function App() {
 
     return (
         <div className="app-container">
-            {/* Header / PC Data Section */}
-            <header className="header-section glass-panel">
-                <div className="logo-area">
-                    <h1>Cyris</h1>
+            {/* Header: two separate glass panels */}
+            <header className="header-section">
+                <div className="logo-box glass-panel">
+                    <div className="logo-area">
+                        <h1>Cyris <span className="logo-sub">— Steam</span></h1>
+                    </div>
                 </div>
+
                 {specs && (
-                    <div className="pc-specs-grid">
-                        <div className="spec-item">
-                            <Cpu size={20} />
-                            <div>
-                                <span className="label">CPU</span>
-                                <strong>{specs.cpu_name}</strong>
+                    <div className="specs-box glass-panel">
+                        <div className="pc-specs-grid">
+                            <div className="spec-item">
+                                <Cpu size={18} />
+                                <div>
+                                    <span className="label">CPU</span>
+                                    <strong>{specs.cpu_name}</strong>
+                                </div>
                             </div>
-                        </div>
-                        <div className="spec-item">
-                            <Monitor size={20} />
-                            <div>
-                                <span className="label">GPU</span>
-                                <strong>{specs.gpu_name}</strong>
+                            <div className="spec-item">
+                                <Monitor size={18} />
+                                <div>
+                                    <span className="label">GPU</span>
+                                    <strong>{specs.gpu_name}</strong>
+                                </div>
                             </div>
-                        </div>
-                        <div className="spec-item">
-                            <HardDrive size={20} />
-                            <div>
-                                <span className="label">RAM / Free Storage</span>
-                                <strong>{Math.round(specs.ram_total_mb / 1024)}GB / {specs.disk_free_gb}GB</strong>
+                            <div className="spec-item">
+                                <HardDrive size={18} />
+                                <div>
+                                    <span className="label">RAM</span>
+                                    <strong>{Math.ceil(specs.ram_total_mb / 1024)}GB</strong>
+                                </div>
+                            </div>
+                            <div className="spec-item">
+                                <HardDrive size={18} />
+                                <div>
+                                    <span className="label">Free Storage</span>
+                                    <strong>{specs.disk_free_gb}GB</strong>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -105,6 +131,8 @@ function App() {
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                                autoComplete="new-password"
+                                spellCheck={false}
                             />
                             <button onClick={handleSearch} className="search-btn">
                                 <SearchIcon size={20} />
@@ -145,21 +173,21 @@ function App() {
                     {/* Game Details Section */}
                     {selectedGameId && gameDetails ? (
                         <div className="game-details glass-panel">
-                            <h2>Requirements</h2>
+                            <h2>Requirements — {selectedGameName}</h2>
                             
                             <div className="requirements-grid">
                                 <div className="req-box min-req">
                                     <h3>Minimum</h3>
-                                    {/* The Steam API often returns HTML string for requirements, so we use dangerouslySetInnerHTML to parse it properly */}
-                                    <div dangerouslySetInnerHTML={{__html: gameDetails.min}}></div>
+                                    {/* The Steam API returns HTML strings; cleanReqHtml strips the redundant heading line */}
+                                    <div dangerouslySetInnerHTML={{__html: cleanReqHtml(gameDetails.min)}}></div>
                                 </div>
                                 <div className="req-box rec-req">
                                     <h3>Recommended</h3>
-                                    <div dangerouslySetInnerHTML={{__html: gameDetails.rec}}></div>
+                                    <div dangerouslySetInnerHTML={{__html: cleanReqHtml(gameDetails.rec)}}></div>
                                 </div>
                             </div>
 
-                            <div className={`match-section ${gameDetails.match ? 'match-good' : 'match-bad'}`}>
+                            <div className={`match-section ${(!gameDetails.matchDetails?.CPU?.Found || !gameDetails.matchDetails?.GPU?.Found) ? 'match-unknown' : gameDetails.match ? 'match-good' : 'match-bad'}`}>
                                 <div className="match-header">
                                     <div className="match-status-icon">
                                         {(!gameDetails.matchDetails?.CPU?.Found || !gameDetails.matchDetails?.GPU?.Found) ? (

@@ -30,16 +30,18 @@ type GPUResult struct {
 	Meets            bool
 	MeetsRecommended bool
 	Found            bool
+	IsIntegrated     bool
+	VRAMFail         bool
 	UserGPU          string
 	RequiredGPU      string
 }
 
 type RequirementsResult struct {
-	CPUCores  bool
-	RAMTotal  bool
-	DiskFree  bool
-	GPU       GPUResult
-	CPU       CPUResult
+	CPUCores bool
+	RAMTotal bool
+	DiskFree bool
+	GPU      GPUResult
+	CPU      CPUResult
 
 	MeetsMinimum     bool
 	MeetsRecommended bool
@@ -59,7 +61,9 @@ type CPUEntry struct {
 }
 
 type GPUEntry struct {
-	Name      string  `json:"name"`
-	FP32      float64 `json:"fp32"`
-	PixelRate float64 `json:"pixelRate"` // used by RightNow DB as proxy for performance
+	Name       string  `json:"name"`
+	FP32       float64 `json:"fp32"`
+	PixelRate  float64 `json:"pixelRate"`
+	MemoryGB   float64 `json:"memorySize"`
+	Integrated bool    `json:"-"`
 }

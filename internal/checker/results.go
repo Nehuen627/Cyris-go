@@ -18,7 +18,6 @@ func CheckRequirements(systemSpecs structs.SystemSpecs, gameData structs.GameDat
 	minRAM, minDisk, minGPU, minCPU := extras.ParseRequirements(gameData.PCRequirements.Minimum)
 	recRAM, recDisk, recGPU, recCPU := extras.ParseRequirements(gameData.PCRequirements.Recommended)
 
-	// systemSpecs.RAMTotal is in MB; ParseRequirements returns GB. Convert to GB for comparison.
 	systemRAMGB := systemSpecs.RAMTotal / 1024
 
 	if systemRAMGB < recRAM {
@@ -29,7 +28,6 @@ func CheckRequirements(systemSpecs structs.SystemSpecs, gameData structs.GameDat
 		MeetsRecommendedRes = false
 	}
 
-	// DiskFree is already in GB; requirements are parsed as GB — no conversion needed.
 	if systemSpecs.DiskFree < recDisk {
 		MeetsRecommendedRes = false
 	}
@@ -38,30 +36,43 @@ func CheckRequirements(systemSpecs structs.SystemSpecs, gameData structs.GameDat
 		MeetsRecommendedRes = false
 	}
 
-	// GPU Check
-	// ghw sometimes returns GPU names without the vendor in them (e.g. "Raptor Lake-P [UHD Graphics]"),
-	// so we combine vendor + name to give LookupGPU full context for matching.
 	userGPULabel := strings.TrimSpace(systemSpecs.GPUVendor + " " + systemSpecs.GPUName)
 	userGPU, foundGPU := extras.LookupGPU(userGPULabel)
 	requiredGPU, reqGPUFound := extras.LookupGPU(minGPU)
 	requiredRecGPU, recGPUFound := extras.LookupGPU(recGPU)
 
 	GPURes.Found = foundGPU
-	if foundGPU && reqGPUFound {
+
+	isIntegrated := userGPU.Integrated || extras.IsIntegratedGPU(userGPULabel)
+	GPURes.IsIntegrated = isIntegrated
+
+	vramThreshold := 1.0
+
+	vramFailMin := isIntegrated && reqGPUFound && requiredGPU.MemoryGB >= vramThreshold
+	vramFailRec := isIntegrated && recGPUFound && requiredRecGPU.MemoryGB >= vramThreshold
+
+	if vramFailMin {
+		GPURes.Meets = false
+		GPURes.VRAMFail = true
+		MeetsMinimumRes = false
+	} else if foundGPU && reqGPUFound {
 		GPURes.Meets = userGPU.FP32 >= requiredGPU.FP32
 		if !GPURes.Meets {
 			MeetsMinimumRes = false
 		}
 	} else if foundGPU && !reqGPUFound {
-		GPURes.Meets = true // Requirement unknown, assume passes
+		GPURes.Meets = true
 	} else if !foundGPU && reqGPUFound {
-		GPURes.Meets = false // User GPU unknown, but requirement known -> Fail to prevent false positives
+		GPURes.Meets = false
 		MeetsMinimumRes = false
 	} else {
-		GPURes.Meets = true // Both unknown -> Assume passes
+		GPURes.Meets = true
 	}
 
-	if foundGPU && recGPUFound {
+	if vramFailRec {
+		GPURes.MeetsRecommended = false
+		MeetsRecommendedRes = false
+	} else if foundGPU && recGPUFound {
 		GPURes.MeetsRecommended = userGPU.FP32 >= requiredRecGPU.FP32
 		if !GPURes.MeetsRecommended {
 			MeetsRecommendedRes = false
@@ -75,7 +86,6 @@ func CheckRequirements(systemSpecs structs.SystemSpecs, gameData structs.GameDat
 		GPURes.MeetsRecommended = true
 	}
 
-	// CPU Check
 	userCPU, foundCPU := extras.LookupCPU(systemSpecs.CPUName)
 	requiredCPU, reqCPUFound := extras.LookupCPU(minCPU)
 	requiredRecCPU, recCPUFound := extras.LookupCPU(recCPU)
