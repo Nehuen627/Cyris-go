@@ -55,11 +55,16 @@ func GetHardwareInfo() structs.SystemSpecs {
 		gpuVendor = card.DeviceInfo.Vendor.Name
 	}
 
+	var cpuName string
+	if len(cpuInfo) > 0 {
+		cpuName = cpuInfo[0].ModelName
+	}
+
 	return structs.SystemSpecs{
-		CPUName:   cpuInfo[0].ModelName,
+		CPUName:   cpuName,
 		CPUCores:  cpuCores,
 		RAMTotal:  ramInfo.Total / 1024 / 1024,
-		DiskTotal: diskInfo.Total / 1024 / 1024 / 1024,
+		DiskFree:  diskInfo.Free / 1024 / 1024 / 1024,
 		OS:        osInfo.OS,
 		GPUName:   gpuName,
 		GPUVendor: gpuVendor,

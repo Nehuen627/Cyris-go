@@ -20,7 +20,7 @@ type SystemSpecs struct {
 	CPUName   string `json:"cpu_name"`
 	CPUCores  int    `json:"cpu_cores"`
 	RAMTotal  uint64 `json:"ram_total_mb"`
-	DiskTotal uint64 `json:"disk_total_gb"`
+	DiskFree  uint64 `json:"disk_free_gb"`
 	GPUName   string `json:"gpu_name"`
 	GPUVendor string `json:"gpu_vendor"`
 	OS        string `json:"os"`
@@ -37,13 +37,29 @@ type GPUResult struct {
 type RequirementsResult struct {
 	CPUCores  bool
 	RAMTotal  bool
-	DiskTotal bool
+	DiskFree  bool
 	GPU       GPUResult
+	CPU       CPUResult
 
 	MeetsMinimum     bool
 	MeetsRecommended bool
 }
+
+type CPUResult struct {
+	Meets            bool
+	MeetsRecommended bool
+	Found            bool
+	UserCPU          string
+	RequiredCPU      string
+}
+
+type CPUEntry struct {
+	Name    string  `json:"name"`
+	CPUMark float64 `json:"cpumark,string"`
+}
+
 type GPUEntry struct {
-	Name string  `json:"name"`
-	FP32 float64 `json:"fp32"`
+	Name      string  `json:"name"`
+	FP32      float64 `json:"fp32"`
+	PixelRate float64 `json:"pixelRate"` // used by RightNow DB as proxy for performance
 }

@@ -1,5 +1,25 @@
 export namespace structs {
 	
+	export class CPUResult {
+	    Meets: boolean;
+	    MeetsRecommended: boolean;
+	    Found: boolean;
+	    UserCPU: string;
+	    RequiredCPU: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CPUResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Meets = source["Meets"];
+	        this.MeetsRecommended = source["MeetsRecommended"];
+	        this.Found = source["Found"];
+	        this.UserCPU = source["UserCPU"];
+	        this.RequiredCPU = source["RequiredCPU"];
+	    }
+	}
 	export class GPUResult {
 	    Meets: boolean;
 	    MeetsRecommended: boolean;
@@ -72,8 +92,9 @@ export namespace structs {
 	export class RequirementsResult {
 	    CPUCores: boolean;
 	    RAMTotal: boolean;
-	    DiskTotal: boolean;
+	    DiskFree: boolean;
 	    GPU: GPUResult;
+	    CPU: CPUResult;
 	    MeetsMinimum: boolean;
 	    MeetsRecommended: boolean;
 	
@@ -85,8 +106,9 @@ export namespace structs {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.CPUCores = source["CPUCores"];
 	        this.RAMTotal = source["RAMTotal"];
-	        this.DiskTotal = source["DiskTotal"];
+	        this.DiskFree = source["DiskFree"];
 	        this.GPU = this.convertValues(source["GPU"], GPUResult);
+	        this.CPU = this.convertValues(source["CPU"], CPUResult);
 	        this.MeetsMinimum = source["MeetsMinimum"];
 	        this.MeetsRecommended = source["MeetsRecommended"];
 	    }
@@ -127,7 +149,7 @@ export namespace structs {
 	    cpu_name: string;
 	    cpu_cores: number;
 	    ram_total_mb: number;
-	    disk_total_gb: number;
+	    disk_free_gb: number;
 	    gpu_name: string;
 	    gpu_vendor: string;
 	    os: string;
@@ -141,7 +163,7 @@ export namespace structs {
 	        this.cpu_name = source["cpu_name"];
 	        this.cpu_cores = source["cpu_cores"];
 	        this.ram_total_mb = source["ram_total_mb"];
-	        this.disk_total_gb = source["disk_total_gb"];
+	        this.disk_free_gb = source["disk_free_gb"];
 	        this.gpu_name = source["gpu_name"];
 	        this.gpu_vendor = source["gpu_vendor"];
 	        this.os = source["os"];

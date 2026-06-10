@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Cpu, HardDrive, Monitor, CheckCircle, XCircle, SearchIcon } from 'lucide-react';
+import { Search, Cpu, HardDrive, Monitor, CheckCircle, XCircle, SearchIcon, AlertCircle, Info, Check, X } from 'lucide-react';
 import './App.css';
 import { GetHardwareInfo, SearchGame, GetGameRequirements, CheckRequirements } from '../wailsjs/go/main/App';
 
@@ -64,7 +64,7 @@ function App() {
             {/* Header / PC Data Section */}
             <header className="header-section glass-panel">
                 <div className="logo-area">
-                    <h1>Can You Run It? <span>Go</span></h1>
+                    <h1>Cyris</h1>
                 </div>
                 {specs && (
                     <div className="pc-specs-grid">
@@ -85,8 +85,8 @@ function App() {
                         <div className="spec-item">
                             <HardDrive size={20} />
                             <div>
-                                <span className="label">RAM / Storage</span>
-                                <strong>{Math.round(specs.ram_total_mb / 1024)}GB / {specs.disk_total_gb}GB</strong>
+                                <span className="label">RAM / Free Storage</span>
+                                <strong>{Math.round(specs.ram_total_mb / 1024)}GB / {specs.disk_free_gb}GB</strong>
                             </div>
                         </div>
                     </div>
@@ -159,23 +159,59 @@ function App() {
                                 </div>
                             </div>
 
-                            <div className={`match-section ${gameDetails.match ? 'match-success' : 'match-fail'}`}>
-                                {gameDetails.match ? (
-                                    <>
-                                        <CheckCircle size={32} />
-                                        <div className="match-text">
-                                            <h3>Your PC Meets the Requirements</h3>
-                                            <p>You should be able to run this game smoothly based on minimum specs.</p>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        <XCircle size={32} />
-                                        <div className="match-text">
-                                            <h3>Your PC Might Struggle</h3>
-                                            <p>Your hardware is below the minimum required settings.</p>
-                                        </div>
-                                    </>
+                            <div className={`match-section ${gameDetails.match ? 'match-good' : 'match-bad'}`}>
+                                <div className="match-header">
+                                    <div className="match-status-icon">
+                                        {(!gameDetails.matchDetails?.CPU?.Found || !gameDetails.matchDetails?.GPU?.Found) ? (
+                                            <Info size={32} />
+                                        ) : gameDetails.match ? (
+                                            <Check size={32} />
+                                        ) : (
+                                            <X size={32} />
+                                        )}
+                                    </div>
+                                    <div className="match-text">
+                                        <h3>System Analysis</h3>
+                                        <p>
+                                            {!gameDetails.matchDetails?.CPU?.Found || !gameDetails.matchDetails?.GPU?.Found
+                                                ? "We couldn't identify your exact CPU/GPU, so we cannot assure you if it will work or not."
+                                                : gameDetails.match 
+                                                    ? "Your PC Meets the Requirements. You should be able to run this game smoothly."
+                                                    : "Your hardware is below the minimum required settings."}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {gameDetails.matchDetails && (
+                                    <div className="missing-details">
+                                        <ul className="missing-list">
+                                            <li className="icon-list-item">
+                                                {gameDetails.matchDetails.CPU?.Found ? 
+                                                    (gameDetails.matchDetails.CPU?.Meets ? <Check size={16} color="#facc15" /> : <X size={16} color="#f472b6" />) : 
+                                                    <Info size={16} color="#94a1d7" />
+                                                }
+                                                <span>CPU: {gameDetails.matchDetails.CPU?.Found ? (gameDetails.matchDetails.CPU?.Meets ? "Meets Minimum" : "Below Minimum") : "Not Found"}</span>
+                                            </li>
+                                            
+                                            <li className="icon-list-item">
+                                                {gameDetails.matchDetails.GPU?.Found ? 
+                                                    (gameDetails.matchDetails.GPU?.Meets ? <Check size={16} color="#facc15" /> : <X size={16} color="#f472b6" />) : 
+                                                    <Info size={16} color="#94a1d7" />
+                                                }
+                                                <span>GPU: {gameDetails.matchDetails.GPU?.Found ? (gameDetails.matchDetails.GPU?.Meets ? "Meets Minimum" : "Below Minimum") : "Not Found"}</span>
+                                            </li>
+
+                                            <li className="icon-list-item">
+                                                {gameDetails.matchDetails.RAMTotal ? <Check size={16} color="#facc15" /> : <X size={16} color="#f472b6" />}
+                                                <span>RAM: {gameDetails.matchDetails.RAMTotal ? "Meets Minimum" : "Below Minimum"}</span>
+                                            </li>
+
+                                            <li className="icon-list-item">
+                                                {gameDetails.matchDetails.DiskFree ? <Check size={16} color="#facc15" /> : <X size={16} color="#f472b6" />}
+                                                <span>Storage: {gameDetails.matchDetails.DiskFree ? "Meets Minimum" : "Below Minimum"}</span>
+                                            </li>
+                                        </ul>
+                                    </div>
                                 )}
                             </div>
                         </div>

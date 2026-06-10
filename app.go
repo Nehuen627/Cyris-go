@@ -24,8 +24,15 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	extras.LoadGPUDatabase()
-	extras.LoadIntegratedDatabase()
+	if err := extras.LoadGPUDatabase(); err != nil {
+		fmt.Println("Warning: failed to load GPU database:", err)
+	}
+	if err := extras.LoadIntegratedDatabase(); err != nil {
+		fmt.Println("Warning: failed to load integrated GPU database:", err)
+	}
+	if err := extras.LoadCPUDatabase(); err != nil {
+		fmt.Println("Warning: failed to load CPU database:", err)
+	}
 }
 
 // Greet returns a greeting for the given name
